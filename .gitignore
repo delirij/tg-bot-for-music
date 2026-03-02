@@ -1,0 +1,18 @@
+# Secret keys
+config.py
+
+# Spotify cache
+.spotipy_cache
+
+# Virtual Environments
+.venv/
+
+# Metadata
+downloads/
+
+# Python system files
+__pycache__/
+
+.vscode/
+ffmpeg.exe
+ffprobe.exe
