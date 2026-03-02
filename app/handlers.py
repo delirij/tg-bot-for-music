@@ -6,12 +6,14 @@ from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import FSInputFile, Message
+from aiogram.types import FSInputFile, Message, InlineKeyboardButton, CallbackQuery
 from aiogram.utils.media_group import MediaGroupBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 
 import app.keyboards as kb
 from downloader import download_track
-from spotify_parser import parse_spotify_link
+from spotify_parser import parse_spotify_link, search_spotify_text
 
 
 router = Router()
@@ -169,3 +171,59 @@ async def find_link(message: Message, state: FSMContext):
     await message.answer(
         f"Готово! Успешно отправлено {success_count} из {total_tracks} треков."
     )
+
+@router.message(FindTrack.wait_input)
+async def text_search(message: Message, state: FSMContext):
+    """
+    Обрабатывает текстовый запрос пользователя (если это не ссылка).
+    Ищет совпадения в Spotify и выдает Inline-кнопки.
+    """
+    query = message.text
+    status_msg = await message.answer(f"Ищу в Spotify: _{query}_...", parse_mode=ParseMode.MARKDOWN)
+
+    result = search_spotify_text(query)
+    
+    if not result:
+        await status_msg.edit_text("Ничего не найдено")
+        return
+    
+    builder_btn = InlineKeyboardBuilder()
+
+    for index, item in enumerate(result):
+        short_id = item['url'].split('spotify.com/')[-1]
+
+        builder_btn.row(InlineKeyboardButton(
+            text=item['name'],
+            callback_data=f'dl_{short_id}'
+        ))
+    await status_msg.edit_text("Выберите нужный альбом/трек",
+                               reply_markup=builder_btn.as_markup()
+                               )
+    await state.clear()
+
+@router.callback_query(F.data.startswith("dl_"))
+async def process_search_result(callback: CallbackQuery, state: FSMContext):
+    """
+    Реагирует на нажатие кнопки из результатов поиска.
+    Перенаправляет бота на скачивание.
+    """
+    # Достаем короткий ID из кнопки
+    short_id = callback.data.replace("dl_", "")
+    
+    # Превращаем его в нормальную ссылку Spotify
+    full_spotify_url = f"https://open.spotify.com/{short_id}"
+    
+    # Убираем кнопки, чтобы юзер не нажал дважды
+    await callback.message.edit_reply_markup(reply_markup=None)
+    
+    # ИСПРАВЛЕНИЕ: Создаем "клон" сообщения с нужным нам текстом
+    fake_message = callback.message.model_copy(update={"text": full_spotify_url})
+    
+    # Передаем этого клона в твою основную функцию скачивания
+    await find_link(fake_message, state)
+    
+    # Говорим Телеграму, что нажатие обработано
+    await callback.answer()
+
+
+

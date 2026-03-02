@@ -162,3 +162,40 @@ def get_my_playlists() -> list:
     except Exception as e:
         print(f"Error fetching user playlists: {e}")
         return []
+    
+def search_spotify_text(query: str) -> list:
+    """
+    Ищет текст в Spotify (сразу и по трекам, и по альбомам).
+    Возвращает список из топ-5 результатов для создания кнопок.
+    """
+    try:
+        # Ищем и треки, и альбомы (limit=3 значит возьмем 3 трека и 3 альбома)
+        results = sp.search(q=query, type='track,album', limit=3)
+        
+        found_items = []
+        
+        # Обрабатываем найденные треки
+        for track in results['tracks']['items']:
+            artists = ", ".join([artist['name'] for artist in track['artists']])
+            found_items.append({
+                'name': f"{artists} - {track['name']}",
+                'url': track['external_urls']['spotify'],
+                'type': 'track'
+            })
+            
+        # Обрабатываем найденные альбомы
+        for album in results['albums']['items']:
+            # Правильное извлечение списка артистов из альбома
+            artists = ", ".join([artist['name'] for artist in album['artists']])
+            
+            # Формируем название с оберткой "[Альбом]"
+            found_items.append({
+                'name': f"[Альбом] {artists} - {album['name']}",
+                'url': album['external_urls']['spotify'],
+                'type': 'album'
+            })
+            
+        return found_items[:5] # Возвращаем топ-5 результатов
+    except Exception as e:
+        print(f"Ошибка текстового поиска Spotify: {e}")
+        return []
